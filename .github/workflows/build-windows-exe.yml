@@ -1,0 +1,29 @@
+name: Build SHAWON Windows EXE
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python for cloud build
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install customtkinter pyinstaller
+      - name: Build EXE
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SHAWON_CLIENT_FINDER --collect-all customtkinter app.py
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHAWON_CLIENT_FINDER_WINDOWS
+          path: dist/SHAWON_CLIENT_FINDER/
+          if-no-files-found: error
