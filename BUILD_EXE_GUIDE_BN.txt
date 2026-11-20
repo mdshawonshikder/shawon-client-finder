@@ -1,0 +1,22 @@
+SHAWON CLIENT FINDER V6 - BUILD WINDOWS EXE WITHOUT INSTALLING PYTHON ON YOUR PC
+
+IMPORTANT:
+Your PC does not need Python for this method. GitHub Actions uses a temporary Windows cloud machine to build the EXE.
+
+1) Sign in to https://github.com/ (create a free account if needed).
+2) Click the + button > New repository.
+3) Repository name: shawon-client-finder
+4) Choose Public (required for free GitHub Actions on the standard free plan in many cases) and click Create repository.
+5) In the new repository, click Add file > Upload files.
+6) Extract this ZIP on your PC. Upload ALL extracted files and folders, including the hidden .github folder. If Windows/browser hides .github, create the workflow file in GitHub using the exact path:
+   .github/workflows/build-windows-exe.yml
+   Paste the contents from that file.
+7) Click Commit changes.
+8) Open the Actions tab. Select "Build SHAWON Windows EXE" on the left.
+9) Click Run workflow > Run workflow.
+10) Wait for the run to finish with a green check. Open the completed run and download the artifact named SHAWON_CLIENT_FINDER_WINDOWS.
+11) Extract the downloaded artifact ZIP. Run SHAWON_CLIENT_FINDER.exe from inside that extracted folder.
+
+Keep the whole extracted app folder together. The EXE is built with --onedir and needs the supporting files beside it.
+
+This workflow builds the current Tkinter desktop app. It does NOT convert it into a web app or create a single-file installer. GitHub may ask you to verify your account or enable Actions. Never upload passwords, API keys, or private customer data to a public repository.
