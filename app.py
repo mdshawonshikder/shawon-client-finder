@@ -4,8 +4,9 @@ from datetime import date, datetime
 import engine
 
 DB = "shawon_client_finder_pro.db"
-BG = "#070b16"; SIDE = "#0c1224"; CARD = "#111a31"; CARD2 = "#18243f"; LINE = "#243158"
-TXT = "#f2f5ff"; MUT = "#8d9bbd"; PUR = "#7c5cff"; CYA = "#22d3ee"; GRN = "#10d9a0"; ORG = "#ff9f43"; RED = "#ff5c7a"; BLU = "#3b82f6"
+BG = "#fdeee3"; SIDE = "#16264a"; CARD = "#ffffff"; CARD2 = "#fde7da"; LINE = "#f0cdb4"
+TXT = "#1b2a4a"; MUT = "#8a7183"; PUR = "#f97316"; CYA = "#d6336c"; GRN = "#0a9d74"; ORG = "#e05f00"; RED = "#e0445e"; BLU = "#2f4b8f"
+NAV_OFF = "#c9d4ee"; PINK_LT = "#ff9fb0"
 SERVICES = ["Logo Design", "Branding", "Business Card Design", "Website Design", "E-commerce Website", "Android App Development", "App UI/UX", "Other"]
 STATUSES = ["New", "Researching", "Ready to Contact", "Contacted", "Replied", "Interested", "Follow-up", "Won", "Not a Fit"]
 EMAIL_ST = ["Not checked", "Format valid", "Domain resolves", "MX record found", "Invalid / no MX", "Unknown"]
@@ -20,7 +21,7 @@ def lt(c, k=28):
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        ctk.set_appearance_mode("dark"); self.title("SHAWON AI CLIENT FINDER PRO | v6.0"); self.geometry("1360x840"); self.minsize(1180, 740)
+        ctk.set_appearance_mode("light"); self.title("SHAWON AI CLIENT FINDER PRO | v6.1"); self.geometry("1360x840"); self.minsize(1180, 740)
         self.configure(fg_color=BG)
         self.conn = sqlite3.connect(DB); self.conn.row_factory = sqlite3.Row
         self.conn.execute("""CREATE TABLE IF NOT EXISTS leads(id INTEGER PRIMARY KEY AUTOINCREMENT, business TEXT NOT NULL, contact TEXT, email TEXT,
@@ -30,7 +31,7 @@ class App(ctk.CTk):
         st = ttk.Style(); st.theme_use("clam")
         st.configure("T.Treeview", background=CARD, fieldbackground=CARD, foreground=TXT, rowheight=38, borderwidth=0, font=("Segoe UI", 10))
         st.configure("T.Treeview.Heading", background=CARD2, foreground=MUT, relief="flat", font=("Segoe UI", 9, "bold"), padding=9)
-        st.map("T.Treeview", background=[("selected", "#2b3a7a")]); st.map("T.Treeview.Heading", background=[("active", CARD2)])
+        st.map("T.Treeview", background=[("selected", "#ffd9b8")]); st.map("T.Treeview.Heading", background=[("active", CARD2)])
         self.side = ctk.CTkFrame(self, width=232, corner_radius=0, fg_color=SIDE); self.side.pack(side="left", fill="y"); self.side.pack_propagate(False)
         self.main = ctk.CTkFrame(self, corner_radius=0, fg_color=BG); self.main.pack(side="left", fill="both", expand=True)
         self.pages = {k: ctk.CTkFrame(self.main, fg_color=BG, corner_radius=0) for k in ("dash", "auto", "leads", "set")}
@@ -41,10 +42,11 @@ class App(ctk.CTk):
     def card(self, p, **kw): return ctk.CTkFrame(p, fg_color=CARD, corner_radius=18, border_width=1, border_color=LINE, **kw)
     def lab(self, p, t, s=12, c=MUT, w="normal"): return ctk.CTkLabel(p, text=t, font=F(s, w), text_color=c)
     def btn(self, p, t, cmd, c=PUR, fg="white", **kw):
+        if c == CARD2 and fg == "white": fg = TXT
         kw.setdefault("height", 40)
         return ctk.CTkButton(p, text=t, command=cmd, fg_color=c, hover_color=lt(c), text_color=fg, corner_radius=12, font=F(12, "bold"), **kw)
     def ent(self, p, var, ph="", w=200): return ctk.CTkEntry(p, textvariable=var, placeholder_text=ph, height=38, width=w, corner_radius=10, fg_color=CARD2, border_color=LINE, text_color=TXT)
-    def menu(self, p, var, vals, w=200): return ctk.CTkOptionMenu(p, variable=var, values=vals, width=w, height=38, corner_radius=10, fg_color=CARD2, button_color=PUR, button_hover_color=lt(PUR), dropdown_fg_color=CARD2)
+    def menu(self, p, var, vals, w=200): return ctk.CTkOptionMenu(p, variable=var, values=vals, width=w, height=38, corner_radius=10, fg_color=CARD2, button_color=PUR, button_hover_color=lt(PUR), dropdown_fg_color=CARD2, text_color=TXT, dropdown_text_color=TXT)
     def table(self, p, cols, widths):
         t = ttk.Treeview(p, columns=cols, show="headings", style="T.Treeview", selectmode="extended")
         for c, w in zip(cols, widths): t.heading(c, text=c.upper()); t.column(c, width=w, anchor="w")
@@ -58,16 +60,16 @@ class App(ctk.CTk):
     def show(self, k):
         for n, f in self.pages.items(): f.pack_forget()
         self.pages[k].pack(fill="both", expand=True)
-        for n, b in self.nav.items(): b.configure(fg_color=PUR if n == k else "transparent", text_color="white" if n == k else MUT)
+        for n, b in self.nav.items(): b.configure(fg_color=PUR if n == k else "transparent", text_color="white" if n == k else NAV_OFF)
 
     def build_side(self):
         s = self.side
         ctk.CTkLabel(s, text="✦", font=F(34, "bold"), text_color=ORG).pack(anchor="w", padx=24, pady=(26, 0))
-        self.lab(s, "SHAWON", 22, TXT, "bold").pack(anchor="w", padx=24)
-        self.lab(s, "AI CLIENT FINDER PRO", 10, CYA, "bold").pack(anchor="w", padx=24, pady=(0, 28))
+        self.lab(s, "SHAWON", 22, "#ffffff", "bold").pack(anchor="w", padx=24)
+        self.lab(s, "AI CLIENT FINDER PRO", 10, PINK_LT, "bold").pack(anchor="w", padx=24, pady=(0, 28))
         self.nav = {}
         for k, t in [("dash", "▦   Dashboard"), ("auto", "⚡   Auto Finder"), ("leads", "☰   My Leads / CRM"), ("set", "⚙   Settings")]:
-            b = ctk.CTkButton(s, text=t, anchor="w", height=46, corner_radius=12, fg_color="transparent", hover_color=CARD2, text_color=MUT, font=F(13, "bold"), command=lambda k=k: self.show(k))
+            b = ctk.CTkButton(s, text=t, anchor="w", height=46, corner_radius=12, fg_color="transparent", hover_color="#22355f", text_color=NAV_OFF, font=F(13, "bold"), command=lambda k=k: self.show(k))
             b.pack(fill="x", padx=16, pady=3); self.nav[k] = b
         box = ctk.CTkFrame(s, fg_color=CARD, corner_radius=16, border_width=1, border_color=LINE); box.pack(side="bottom", fill="x", padx=16, pady=20)
         self.lab(box, "100% FREE MODE", 11, GRN, "bold").pack(anchor="w", padx=16, pady=(14, 2))
@@ -88,7 +90,7 @@ class App(ctk.CTk):
         q = ctk.CTkFrame(p, fg_color="transparent"); q.pack(fill="x", padx=30, pady=18)
         self.btn(q, "⚡  Find new clients", lambda: self.show("auto"), PUR, width=190).pack(side="left", padx=(0, 10))
         self.btn(q, "＋  Add lead manually", lambda: (self.clear(), self.show("leads")), BLU, width=190).pack(side="left", padx=10)
-        self.btn(q, "⇩  Export CSV", self.export_csv, GRN, fg="#04251c", width=150).pack(side="left", padx=10)
+        self.btn(q, "⇩  Export CSV", self.export_csv, GRN, fg="white", width=150).pack(side="left", padx=10)
         mid = ctk.CTkFrame(p, fg_color="transparent"); mid.pack(fill="both", expand=True, padx=24, pady=(0, 20))
         l = self.card(mid); l.pack(side="left", fill="both", expand=True, padx=6)
         self.lab(l, "PIPELINE", 12, TXT, "bold").pack(anchor="w", padx=22, pady=(18, 8)); self.pipe = {}
@@ -135,7 +137,7 @@ class App(ctk.CTk):
         self.lab(service_row, "Choose a service, then search for businesses or public project requests.", 10, MUT).pack(side="left", padx=12)
         bar = ctk.CTkFrame(p, fg_color="transparent"); bar.pack(fill="x", padx=30, pady=8)
         self.btn(bar, "🛠 Audit websites", self.auto_audit, BLU, width=145).pack(side="left", padx=(0, 6))
-        self.btn(bar, "＋ Save to CRM", self.auto_save, GRN, fg="#04251c", width=130).pack(side="left", padx=6)
+        self.btn(bar, "＋ Save to CRM", self.auto_save, GRN, fg="white", width=130).pack(side="left", padx=6)
         self.btn(bar, "Google: Project Requests", self.open_google_opportunities, CARD2, width=190).pack(side="left", padx=6)
         self.btn(bar, "Bing: Project Requests", self.open_bing_opportunities, CARD2, width=180).pack(side="left", padx=6)
         self.astatus = self.lab(bar, "Business listings are prospects; project-request searches reveal stronger buying intent.", 9, CYA, "bold"); self.astatus.pack(side="left", padx=6)
@@ -274,7 +276,7 @@ class App(ctk.CTk):
         self.lab(form, "Notes", 10, MUT, "bold").pack(anchor="w", pady=(6, 1)); self.notes = ctk.CTkTextbox(form, height=70, fg_color=CARD2, corner_radius=10); self.notes.pack(fill="x")
         r = ctk.CTkFrame(form, fg_color="transparent"); r.pack(fill="x", pady=(12, 4))
         for t, c, f in [("SAVE", PUR, self.save), ("CLEAR", CARD2, self.clear), ("DELETE", RED, self.delete)]: self.btn(r, t, f, c, width=96).pack(side="left", padx=3, expand=True)
-        for t, c, f, fg in [("🛠  Audit website", BLU, self.audit_current, "white"), ("✨  AI pitch message", ORG, self.pitch_current, "#2a1600"), ("✉  Check email domain", CYA, self.verify_email, "#04222a"), ("↗  Open website", CARD2, self.open_site, "white")]:
+        for t, c, f, fg in [("🛠  Audit website", BLU, self.audit_current, "white"), ("✨  AI pitch message", ORG, self.pitch_current, "white"), ("✉  Check email domain", CYA, self.verify_email, "white"), ("↗  Open website", CARD2, self.open_site, "white")]:
             self.btn(form, t, f, c, fg=fg).pack(fill="x", pady=3)
 
     def formdata(self):
@@ -362,7 +364,7 @@ class App(ctk.CTk):
             text, note = res; w = ctk.CTkToplevel(self); w.title("AI Pitch - review before sending"); w.geometry("640x520"); w.configure(fg_color=BG); w.after(100, w.lift)
             self.lab(w, note, 11, CYA, "bold").pack(anchor="w", padx=20, pady=(18, 6))
             t = ctk.CTkTextbox(w, fg_color=CARD, corner_radius=14, font=F(13), wrap="word"); t.pack(fill="both", expand=True, padx=20); t.insert("1.0", text)
-            self.btn(w, "COPY MESSAGE", lambda: (self.clipboard_clear(), self.clipboard_append(t.get("1.0", "end"))), GRN, fg="#04251c").pack(pady=16)
+            self.btn(w, "COPY MESSAGE", lambda: (self.clipboard_clear(), self.clipboard_append(t.get("1.0", "end"))), GRN, fg="white").pack(pady=16)
         self.bg(lambda: engine.pitch(engine.load_cfg(), d), done)
 
     def verify_email(self):
@@ -413,7 +415,7 @@ class App(ctk.CTk):
             e = self.ent(c, self.kv[k], "English" if k == "pitch_lang" else "paste key here", 420); e.grid(row=r, column=1, sticky="w", padx=10, pady=4)
             if k != "pitch_lang": e.configure(show="•")
         b = ctk.CTkFrame(c, fg_color="transparent"); b.grid(row=5, column=0, columnspan=3, sticky="w", padx=22, pady=16)
-        self.btn(b, "SAVE SETTINGS", lambda: (engine.save_cfg({k: v.get().strip() for k, v in self.kv.items()}), messagebox.showinfo("Saved", "Settings saved.")), GRN, fg="#04251c", width=160).pack(side="left")
+        self.btn(b, "SAVE SETTINGS", lambda: (engine.save_cfg({k: v.get().strip() for k, v in self.kv.items()}), messagebox.showinfo("Saved", "Settings saved.")), GRN, fg="white", width=160).pack(side="left")
         self.btn(b, "Get free Gemini key", lambda: webbrowser.open("https://aistudio.google.com/apikey"), CARD2, width=170).pack(side="left", padx=10)
         self.btn(b, "Get free Groq key", lambda: webbrowser.open("https://console.groq.com/keys"), CARD2, width=160).pack(side="left")
         i = self.card(p); i.pack(fill="x", padx=30, pady=18)

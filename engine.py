@@ -1,9 +1,11 @@
 import json, re, time, urllib.request, urllib.parse
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import date
 from pathlib import Path
 
 CFG = Path("settings.json")
-UA = {"User-Agent": "ShawonClientFinder/3.0 (freelancer lead research)"}
+CACHE = Path("osm_cache.json")
+UA = {"User-Agent": "ShawonClientFinder/3.0 (freelancer lead research)", "Accept": "application/json"}
 CATS = {
     "restaurant": '["amenity"="restaurant"]', "cafe": '["amenity"="cafe"]',
     "clothing shop": '["shop"="clothes"]', "salon / beauty": '["shop"~"hairdresser|beauty"]',
@@ -40,36 +42,97 @@ def http(url, data=None, headers=None, timeout=15):
 
 
 # ---------- Lead sources ----------
+OVERPASS_ENDPOINTS = (
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.nchc.org.tw/api/interpreter",
+    "https://overpass.openstreetmap.ru/cgi/interpreter",
+)
+
+
+def _cache_get(key):
+    try:
+        d = json.loads(CACHE.read_text(encoding="utf-8"))
+        hit = d.get(key)
+        if hit and time.time() - hit.get("ts", 0) < 24 * 3600:
+            return hit.get("rows")
+    except Exception:
+        pass
+    return None
+
+
+def _cache_put(key, rows):
+    try:
+        try:
+            d = json.loads(CACHE.read_text(encoding="utf-8"))
+        except Exception:
+            d = {}
+        d[key] = {"ts": time.time(), "rows": rows}
+        CACHE.write_text(json.dumps(d), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _overpass_one(endpoint, q):
+    _, body, _, _ = http(endpoint, data=urllib.parse.urlencode({"data": q}),
+                         headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=30)
+    return json.loads(body)
+
+
 def osm(cat, city, country, limit=80):
     """Search public OSM listings. Coverage varies by country and category."""
     city, country = city.strip(), country.strip()
     if not city or not country:
         raise Exception("Enter both a city and a country.")
-    geo_url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
-        {"q": f"{city}, {country}", "format": "jsonv2", "limit": 1, "addressdetails": 1})
-    _, geo_text, _, _ = http(geo_url, headers={"Accept-Language": "en"}, timeout=20)
-    places = json.loads(geo_text)
-    if not places:
-        raise Exception(f"Could not locate {city}, {country}. Check the spelling.")
-    south, north, west, east = places[0]["boundingbox"]
     selector = CATS.get(cat)
     if not selector:
         raise Exception("Unsupported business category.")
-    q = (f'[out:json][timeout:45];nwr{selector}["name"]'
-         f'({south},{west},{north},{east});out center tags {min(max(int(limit), 1), 100)};')
+    limit = min(max(int(limit), 1), 100)
+    ckey = f"{cat}|{city.casefold()}|{country.casefold()}|{limit}"
+    cached = _cache_get(ckey)
+    if cached is not None:
+        return cached
+    geo_url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
+        {"q": f"{city}, {country}", "format": "jsonv2", "limit": 1, "addressdetails": 1})
+    _, geo_text, _, _ = http(geo_url, headers={"Accept-Language": "en"}, timeout=15)
+    places = json.loads(geo_text)
+    if not places:
+        raise Exception(f"Could not locate {city}, {country}. Check the spelling.")
+    lat, lon = places[0]["lat"], places[0]["lon"]
+    # Light query: 3 km radius around the city centre instead of the whole city box.
+    q = (f'[out:json][timeout:25];nwr{selector}["name"]'
+         f'(around:3000,{lat},{lon});out center tags {limit};')
+    # Race every public Overpass mirror in parallel; the first good answer wins.
+    # Hard cap ~35s so the app never spins forever like before.
     result = None
-    for endpoint in ("https://overpass-api.de/api/interpreter",
-                     "https://overpass.kumi.systems/api/interpreter",
-                     "https://overpass.private.coffee/api/interpreter"):
-        try:
-            _, body, _, _ = http(endpoint, data=urllib.parse.urlencode({"data": q}),
-                                 headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=65)
-            result = json.loads(body)
-            break
-        except Exception:
-            continue
+    pool = ThreadPoolExecutor(max_workers=len(OVERPASS_ENDPOINTS))
+    try:
+        futs = {pool.submit(_overpass_one, ep, q): ep for ep in OVERPASS_ENDPOINTS}
+        done, _ = wait(futs, timeout=35, return_when=FIRST_COMPLETED)
+        for f in done:
+            try:
+                r = f.result()
+                if isinstance(r, dict) and "elements" in r:
+                    result = r
+                    break
+            except Exception:
+                continue
+        if result is None:
+            # First finishers may have failed fast; give the rest a short grace window.
+            done, _ = wait(futs, timeout=10, return_when=FIRST_COMPLETED)
+            for f in done:
+                try:
+                    r = f.result()
+                    if isinstance(r, dict) and "elements" in r:
+                        result = r
+                        break
+                except Exception:
+                    continue
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     if result is None:
-        raise Exception("OpenStreetMap servers are busy. Try again later.")
+        raise Exception("Map servers are busy right now. Wait a minute and press FIND again.")
     out, seen = [], set()
     for el in result.get("elements", []):
         tags = el.get("tags", {})
@@ -92,6 +155,7 @@ def osm(cat, city, country, limit=80):
         seen.add(key)
         out.append({"name": name, "website": website, "phone": phone, "email": email,
                     "address": address, "src": f"https://www.openstreetmap.org/{el['type']}/{el['id']}"})
+    _cache_put(ckey, out)
     return out
 
 # ---------- Website audit + public email finder ----------
