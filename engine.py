@@ -1,4 +1,4 @@
-import json, re, time, urllib.request, urllib.parse
+import json, re, socket, time, urllib.request, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from datetime import date
 from pathlib import Path
@@ -6,6 +6,58 @@ from pathlib import Path
 CFG = Path("settings.json")
 CACHE = Path("osm_cache.json")
 UA = {"User-Agent": "ShawonClientFinder/3.0 (freelancer lead research)", "Accept": "*/*"}
+
+
+# ---------- DNS fallback ----------
+# On some networks the system DNS cannot resolve the map-server domains
+# (Windows error 11001 "getaddrinfo failed") while the browser still can,
+# because Chrome uses its own secure DNS. When the system resolver fails,
+# ask public DNS-over-HTTPS servers (reached by IP, so no DNS needed) and
+# hand the real IP to the connection layer; TLS still checks the real
+# hostname, so this stays safe.
+_DOH = ("https://1.1.1.1/dns-query", "https://8.8.8.8/resolve")
+_ip_cache = {}
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _doh_resolve(host, depth=0):
+    if host in _ip_cache:
+        return _ip_cache[host]
+    ips = []
+    for base in _DOH:
+        try:
+            url = base + "?" + urllib.parse.urlencode({"name": host, "type": "A"})
+            req = urllib.request.Request(url, headers={"accept": "application/dns-json",
+                                                        "User-Agent": UA["User-Agent"]})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                ans = json.loads(r.read()).get("Answer") or []
+            ips = [a["data"] for a in ans if a.get("type") == 1]
+            if not ips and depth < 3:
+                cname = next((a["data"].rstrip(".") for a in ans if a.get("type") == 5), None)
+                if cname:
+                    ips = _doh_resolve(cname, depth + 1)
+            if ips:
+                break
+        except Exception:
+            continue
+    if ips:
+        _ip_cache[host] = ips
+    return ips
+
+
+def _patched_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    try:
+        return _real_getaddrinfo(host, port, family, type, proto, flags)
+    except socket.gaierror:
+        if not isinstance(host, str) or not host or host.replace(".", "").isdigit():
+            raise
+        ips = _doh_resolve(host)
+        if not ips:
+            raise
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port)) for ip in ips]
+
+
+socket.getaddrinfo = _patched_getaddrinfo
 CATS = {
     "restaurant": '["amenity"="restaurant"]', "cafe": '["amenity"="cafe"]',
     "clothing shop": '["shop"="clothes"]', "salon / beauty": '["shop"~"hairdresser|beauty"]',
