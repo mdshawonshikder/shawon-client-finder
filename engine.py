@@ -5,7 +5,7 @@ from pathlib import Path
 
 CFG = Path("settings.json")
 CACHE = Path("osm_cache.json")
-UA = {"User-Agent": "ShawonClientFinder/3.0 (freelancer lead research)", "Accept": "application/json"}
+UA = {"User-Agent": "ShawonClientFinder/3.0 (freelancer lead research)", "Accept": "*/*"}
 CATS = {
     "restaurant": '["amenity"="restaurant"]', "cafe": '["amenity"="cafe"]',
     "clothing shop": '["shop"="clothes"]', "salon / beauty": '["shop"~"hairdresser|beauty"]',
@@ -48,6 +48,8 @@ OVERPASS_ENDPOINTS = (
     "https://overpass.private.coffee/api/interpreter",
     "https://overpass.nchc.org.tw/api/interpreter",
     "https://overpass.openstreetmap.ru/cgi/interpreter",
+    "https://overpass.osm.ch/api/interpreter",
+    "https://api.openstreetmap.fr/oapi/interpreter",
 )
 
 
@@ -74,10 +76,47 @@ def _cache_put(key, rows):
         pass
 
 
+LAST_ERRORS = []
+
+
 def _overpass_one(endpoint, q):
-    _, body, _, _ = http(endpoint, data=urllib.parse.urlencode({"data": q}),
-                         headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=30)
-    return json.loads(body)
+    """Try POST first, then GET — different networks/middleboxes treat them differently."""
+    try:
+        _, body, _, _ = http(endpoint, data=urllib.parse.urlencode({"data": q}),
+                             headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=30)
+        return json.loads(body)
+    except Exception:
+        url = endpoint + "?" + urllib.parse.urlencode({"data": q})
+        _, body, _, _ = http(url, timeout=30)
+        return json.loads(body)
+
+
+def _race_overpass(q):
+    """Ask all mirrors at once; return the first valid answer, else None.
+    Hard cap ~35s so a search never spins forever. Per-server errors are
+    collected in LAST_ERRORS so a failure message can say what really happened."""
+    global LAST_ERRORS
+    LAST_ERRORS = []
+    pool = ThreadPoolExecutor(max_workers=len(OVERPASS_ENDPOINTS))
+    try:
+        futs = {pool.submit(_overpass_one, ep, q): ep for ep in OVERPASS_ENDPOINTS}
+        for window in (35, 10):
+            done, _ = wait(futs, timeout=window, return_when=FIRST_COMPLETED)
+            for f in done:
+                ep = futs[f]
+                try:
+                    r = f.result()
+                    if isinstance(r, dict) and "elements" in r:
+                        return r
+                    LAST_ERRORS.append(f"{ep.split('/')[2]}: bad reply")
+                except Exception as e:
+                    LAST_ERRORS.append(f"{ep.split('/')[2]}: {type(e).__name__} {str(e)[:60]}")
+            futs = {f: ep for f, ep in futs.items() if not f.done()}
+            if not futs:
+                return None
+        return None
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def osm(cat, city, country, limit=80):
@@ -104,35 +143,18 @@ def osm(cat, city, country, limit=80):
     q = (f'[out:json][timeout:25];nwr{selector}["name"]'
          f'(around:3000,{lat},{lon});out center tags {limit};')
     # Race every public Overpass mirror in parallel; the first good answer wins.
-    # Hard cap ~35s so the app never spins forever like before.
+    # If every mirror is busy, wait a few seconds and race once more — the
+    # "too many requests" responses usually clear within seconds.
     result = None
-    pool = ThreadPoolExecutor(max_workers=len(OVERPASS_ENDPOINTS))
-    try:
-        futs = {pool.submit(_overpass_one, ep, q): ep for ep in OVERPASS_ENDPOINTS}
-        done, _ = wait(futs, timeout=35, return_when=FIRST_COMPLETED)
-        for f in done:
-            try:
-                r = f.result()
-                if isinstance(r, dict) and "elements" in r:
-                    result = r
-                    break
-            except Exception:
-                continue
-        if result is None:
-            # First finishers may have failed fast; give the rest a short grace window.
-            done, _ = wait(futs, timeout=10, return_when=FIRST_COMPLETED)
-            for f in done:
-                try:
-                    r = f.result()
-                    if isinstance(r, dict) and "elements" in r:
-                        result = r
-                        break
-                except Exception:
-                    continue
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+    for attempt in range(2):
+        if attempt:
+            time.sleep(5)
+        result = _race_overpass(q)
+        if result is not None:
+            break
     if result is None:
-        raise Exception("Map servers are busy right now. Wait a minute and press FIND again.")
+        detail = "; ".join(LAST_ERRORS[:4]) or "no reply from any server"
+        raise Exception("Map servers did not answer. Details: " + detail)
     out, seen = [], set()
     for el in result.get("elements", []):
         tags = el.get("tags", {})

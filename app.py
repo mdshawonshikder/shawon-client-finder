@@ -21,7 +21,7 @@ def lt(c, k=28):
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        ctk.set_appearance_mode("light"); self.title("SHAWON AI CLIENT FINDER PRO | v6.1"); self.geometry("1360x840"); self.minsize(1180, 740)
+        ctk.set_appearance_mode("light"); self.title("SHAWON AI CLIENT FINDER PRO | v6.2"); self.geometry("1360x840"); self.minsize(1180, 740)
         self.configure(fg_color=BG)
         self.conn = sqlite3.connect(DB); self.conn.row_factory = sqlite3.Row
         self.conn.execute("""CREATE TABLE IF NOT EXISTS leads(id INTEGER PRIMARY KEY AUTOINCREMENT, business TEXT NOT NULL, contact TEXT, email TEXT,
